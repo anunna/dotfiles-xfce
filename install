@@ -1,0 +1,265 @@
+#!/usr/bin/env sh
+
+set -o errexit -o nounset
+
+WORKDIR="$HOME"
+PV="2.1.0"
+
+###############################################################
+# Check deps
+
+if ! hash git 2>/dev/null ; then
+  echo "You have to install git plz"
+  exit 1
+fi
+
+###############################################################
+# Local functions
+
+die() { echo "[-] $1"; exit 1; }
+anim() {
+  i=0
+  sp='/-\|'
+  n=${#sp}
+  printf ' '
+  while sleep 0.1; do
+    printf "%s\b" "${sp:i++%n:1}"
+  done
+}
+
+# Download with git ( arg1 = url | arg2 = path )
+dl() {
+  local pid
+  echo -n "dl $1..."
+  anim &
+  pid="$!"
+  $(git clone "$1" "$2" 2>/dev/null || exit 1)
+  echo "[ok]"
+  kill "$pid" # kill anim()
+}
+
+# Check if file exist else download ( arg1 = url | arg2 = path )
+chk() {
+  [ -d "$2" ] || dl "$1" "$2"
+}
+
+forZsh() {
+  OH_MY_ZSH="$WORKDIR"/.oh-my-zsh
+  SPACESHIP="$OH_MY_ZSH"/themes/spaceship-prompt
+  [ -s "$OH_MY_ZSH"/themes/spaceship.zsh-theme ] && unlink "$OH_MY_ZSH"/themes/spaceship.zsh-theme
+  [ -d "$SPACESHIP" ] && rm -rf "$SPACESHIP"
+  [ -d "$OH_MY_ZSH" ] && {
+    read -p "Clearing oh-my-zsh for updates? [y/n] "
+    if [[ "$REPLY" =~ ^y|^Y ]] ; then
+      rm -rf "$OH_MY_ZSH"
+    else
+      echo "Ok, we keep your directory..."
+    fi
+  }
+  chk https://github.com/robbyrussell/oh-my-zsh.git "$OH_MY_ZSH"
+  chk https://github.com/denysdovhan/spaceship-prompt.git "$SPACESHIP"
+  # create symbolic link
+  ln -s "$SPACESHIP"/spaceship.zsh-theme "$OH_MY_ZSH"/themes/spaceship.zsh-theme
+}
+
+dll_vim() {
+  [ -d "$2" ] && rm -rf "$2"
+  f="${2##*/}"
+  p="${2%/*}"
+  (cd "$p" \
+    && curl -L -o "$f".zip https://github.com/"$1"/archive/master.zip \
+    && unzip "$f".zip \
+    && mv "$f"-master "$f" \
+    && rm -f "$f".zip
+  )
+}
+
+vimcolors() {
+  vim_dir="$WORKDIR"/.vim/pack/my-plugins/start
+
+  [ -d "$vim_dir" ] || mkdir -p "$vim_dir"
+  chk https://github.com/szorfein/fromthehell.vim "$vim_dir"/fromthehell.vim
+  chk https://github.com/szorfein/lightline.vim "$vim_dir"/lightline.vim
+  chk https://github.com/edkolev/tmuxline.vim "$vim_dir"/tmuxline.vim
+  chk https://github.com/szorfein/sci.vim "$vim_dir"/sci
+  chk https://github.com/szorfein/vamp.vim "$vim_dir"/vamp
+}
+
+vimplugins() {
+  vim_dir="$WORKDIR"/.vim/pack/my-plugins/start
+  [ -d "$vim_dir" ] || mkdir -p "$vim_dir"
+
+  dll_vim dense-analysis/ale "$vim_dir"/ale
+  dll_vim ryanoasis/vim-devicons "$vim_dir"/vim-devicons
+  dll_vim lilydjwg/colorizer "$vim_dir"/colorizer
+  dll_vim Yggdroot/indentLine "$vim_dir"/indentLine
+  dll_vim itchyny/lightline.vim "$vim_dir"/lightline.vim
+  dll_vim mengelbrecht/lightline-bufferline "$vim_dir"/lightline-bufferline
+  dll_vim airblade/vim-gitgutter "$vim_dir"/vim-gitgutter
+  dll_vim christoomey/vim-tmux-navigator "$vim_dir"/vim-tmux-navigator
+}
+
+download_images() {
+  DEST="$WORKDIR"/images
+
+  if ! hash unzip 2>/dev/null ; then
+    die "You need to install unzip"
+  fi
+  [ -d "$DEST" ] || mkdir -p "$DEST"
+  (cd "$DEST" \
+    && curl -L -o walls.zip https://github.com/szorfein/walls/archive/main.zip \
+    && unzip walls.zip \
+    && mv -f walls-main/*.jpg "$DEST"/ \
+    && rm -rf walls*
+  )
+}
+
+check_font() {
+  my_font=$(fc-match -a | grep -i "$1" | tail -1)
+  if [ "$my_font" == '' ]; then
+    return 1
+  else
+    return 0
+  fi
+}
+
+install_font() {
+  if ! check_font "$1"; then
+    echo "Font \"$1\" not installed yet"
+    [ -f "$2" ] || {
+      rm -rf "$1"
+      mkdir "$1"
+      curl -s -L -o "$2" "$3"
+      (cd "$1" \
+        && unzip ../"$2"
+      )
+    }
+  else
+    echo "Font \"$1\" alrealy installed, skip..."
+  fi
+}
+
+grab_fonts() {
+  DIR_FONT="$WORKDIR"/.local/share/fonts
+  [ -d "$DIR_FONT" ] || mkdir -p "$DIR_FONT"
+
+  echo "Nerd Fonts..."
+  (cd "$DIR_FONT" \
+    && install_font "Iosevka Nerd Font" "Iosevka-$PV.zip" "https://github.com/ryanoasis/nerd-fonts/releases/download/v$PV/Iosevka.zip" \
+    && install_font "SpaceMono Nerd Font" "SpaceMono-$PV.zip" "https://github.com/ryanoasis/nerd-fonts/releases/download/v$PV/SpaceMono.zip" \
+  )
+
+  echo "The Material font..."
+  (cd "$DIR_FONT" \
+    && rm -rf font-material* \
+    && rm -rf MaterialDesign* \
+    && rm -rf materialdesign* \
+    && curl -s -L -o font-material.zip "https://github.com/Templarian/MaterialDesign-Font/archive/master.zip" \
+    && unzip font-material.zip \
+    && rm -f MaterialDesign-Font-master/{README.md,LICENSE}
+  )
+
+  echo "Dafont"
+  (cd $DIR_FONT \
+    && install_font cyberpunk "cyberpunk.zip" "https://dl.dafont.com/dl/?f=cyberpunks") 
+
+  fc-cache -vf $DIR_FONT
+}
+
+banner() {
+  printf "%s\n" \
+    '
+   @@@@@@@   @@@@@@  @@@@@@@ @@@@@@@@ @@@ @@@      @@@@@@@@  @@@@@@
+   @@!  @@@ @@!  @@@   @@!   @@!      @@! @@!      @@!      !@@    
+   @!@  !@! @!@  !@!   @!!   @!!!:!   !!@ @!!      @!!!:!    !@@!! 
+   !!:  !!! !!:  !!!   !!:   !!:      !!: !!:      !!:          !:!
+   :: :  :   : :. :     :     :       :   : ::.: : : :: ::: ::.: : 
+      '
+}
+
+usage() {
+    printf "%s\n" \
+      "-z, --zsh     Download and install dependencies of zsh"
+
+    printf "%s\n" \
+      "-i, --images  Download all the wallpapers."
+
+    printf "%s\n" \
+      "-v, --vim     Download and install all the vim colorscheme"
+
+    printf "%s\n" \
+      "-f, --fonts   Download and install all the fonts"
+
+    printf "%s\n" \
+      "-d, --dest    Use a directory different than $HOME"
+
+    printf "%s\n" \
+      "-h, --help    Display this help"
+    }
+
+###############################################################
+# Command line options
+
+if [ "$#" -eq 0 ]; then
+  printf "%s\\n" "$0: Argument required"
+  printf "%s\\n" "Try '$0 --help' for more information."
+  exit 1
+fi
+
+# Options
+ZSH=false
+VIM=false
+PLUGINS=false
+IMG=false
+FONT=false
+
+while [ "$#" -gt 0 ] ; do
+  case "$1" in
+    -d | --dest)
+      WORKDIR="$2"
+      shift
+      shift
+      ;;
+    -z | --zsh)
+      ZSH=true
+      shift
+      ;;
+    -v | --vim)
+      VIM=true
+      shift
+      ;;
+    -p | --vimplugins)
+      PLUGINS=true
+      shift
+      ;;
+    -i | --images)
+      IMG=true
+      shift
+      ;;
+    -f | --fonts)
+      FONT=true
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      printf "\\n%s\\n" "$0: Invalid option '$1'"
+      exit 1
+      ;;
+  esac
+done
+
+main() {
+  banner
+  "$ZSH" && forZsh
+  "$VIM" && vimcolors
+  "$PLUGINS" && vimplugins
+  "$IMG" && download_images
+  "$FONT" && grab_fonts
+}
+
+main "$@"
+
