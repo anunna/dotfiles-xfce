@@ -1,0 +1,16 @@
+{
+	"changeLogs": {
+		"BDFDB": "1.2.5",
+		"DisplayServersAsChannels": "1.4.6",
+		"ImageUtilities": "4.2.4",
+		"MessageUtilities": "1.8.1",
+		"PersonalPins": "1.9.9",
+		"PluginRepo": "2.1.1",
+		"ShowHiddenChannels": "2.8.7",
+		"ThemeRepo": "2.1.1"
+	},
+	"settings": {
+		"showSupportBadges": true,
+		"showToasts": true
+	}
+}
